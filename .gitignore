@@ -1,0 +1,9 @@
+/.venv
+/.vscode
+/inputs
+/Knowledge Transcriptor.code-workspace
+/mp3
+/outputs
+/Qdrant_API_key.txt
+/resources
+/__pycache__
