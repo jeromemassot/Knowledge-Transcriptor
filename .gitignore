@@ -7,3 +7,4 @@
 /Qdrant_API_key.txt
 /resources
 /__pycache__
+.streamlit/secrets.toml
