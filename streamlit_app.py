@@ -1,5 +1,6 @@
 from audios_whisper_transcriptor import init_pipeline, transcribe, segment
 from videos_stream_retriever import extract_audio_from_playlist
+from segments_encoder_indexor import encode_and_index
 import streamlit as st
 import os
 
@@ -12,6 +13,7 @@ def update_path():
 
 
 update_path()
+
 
 @st.cache_resource(show_spinner=False)
 def _init_pipeline(model_name):
@@ -66,19 +68,28 @@ with st.expander("Inspect playlist schema"):
     with open(os.path.join("./inputs", play_list_filename), "r", encoding="utf8") as f:
         lines = f.readlines()
         lines = [l.replace('\t', '') for l in lines[:2]]
+        metadata_labels = lines[0].replace('\n', '')
         st.write(lines)
 
 # specify the separator symbol
 separator = st.selectbox("Separator symbol", options=[",", ";", "|"])
 
-# collection name to be created or updated
-collection_name = st.text_input("Collection name", value="my_collection")
+# extract the metadata labels
+metadata_labels = lines[0].replace('\n', '').split(separator)
+
+# choose metadata columns to enrich the vectors
+st.markdown("""
+    You can choose here the additional data to be used to enrich the search experience.
+    This additional data is contained in the playlist csv file.
+""")
+
+chosen_metadata = st.multiselect("Metadata", options=metadata_labels)
 
 # extract audio streams button
 extract_streams_button = st.button("Extract audio from playlist")
-collection_path = os.path.join("./mp3", collection_name)
+collection_path = os.path.join("./mp3", play_list_filename)
 
-if extract_streams_button and collection_name and play_list_filename:
+if extract_streams_button  and play_list_filename:
     play_list_path = os.path.join("./inputs", play_list_filename)
 
     if not os.path.exists(collection_path):
@@ -131,7 +142,7 @@ if transcript_streams_button and mp3_collection_path:
         audio_path = os.path.join(mp3_collection_path, audio_file)
         msg = transcribe(audio_path, pipe, chunks_folder)
         transcription_log.append(msg)
-        if k > 3:
+        if k > 2:
             break
         else:
             k += 1
@@ -158,7 +169,7 @@ st.info("""
 chunks_collections = os.listdir("./outputs/chunks")
 
 # select the chunks collection folder
-chunks_collection_name = st.selectbox("Collection", options=chunks_collections)
+chunks_collection_name = st.selectbox("Collection of text chunks", options=chunks_collections)
 chunks_collection_path = os.path.join("./outputs/chunks", chunks_collection_name)
 
 # set the output chunks folder
@@ -186,3 +197,47 @@ if segment_chunks_button and chunks_collection_path:
     st.balloons()
 
     st.write(f'Segmentation completed for {len(segmentation_log)} chunked file(s).')
+
+st.subheader("Encode and Index Segments")
+
+st.markdown("""
+    The fifth step of the pipeline is to encode the segments and index them into a vector
+    database. The encoding is done using the sentence-transformers library. The indexing
+    is done with Qdrant vector database.
+""")
+
+st.info("""
+    As the segments lenght is usually quite short, the encoding is done at the segment level.
+    No overlapping is done between the segments It means the the knowledge retriever will 
+    search among 60s knowledge segments in the knowledge base.
+""")
+
+st.info("""The encoding model is all-MiniLM-L6-v2.""")
+
+# list of segments collections
+segments_collections = os.listdir("./outputs/segments")
+
+# select the segments collection folder
+segments_collection_name = st.selectbox("Collection of text segments", options=segments_collections)
+segments_collection_path = os.path.join("./outputs/segments", segments_collection_name)
+
+# set the output vectors folder
+vectors_folder =  os.path.join("./outputs/vectors", segments_collection_name)
+if not os.path.exists(vectors_folder):
+    os.mkdir(vectors_folder)
+
+# encode the segments button
+encode_segments_button = st.button("Encode selected segments")
+
+if encode_segments_button and segments_collection_path:
+    msg = encode_and_index(
+        segments_collection_path, 
+        segments_collection_name, 
+        chosen_metadata,
+        qdrant_api_key=st.secrets["QDRANT_API_KEY"]
+    )
+    
+     # add some fun
+    st.balloons()
+
+    st.write(f'Encoding and Indexing: {msg}.')
