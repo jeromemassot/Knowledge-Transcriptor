@@ -14,7 +14,7 @@ YT_LENGTH_LIMIT_S = 5400  # limit to 1.5 hour audio files
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-def init_pipeline(model_name) -> pipeline:
+def init_pipeline(model_name:str) -> pipeline:
     """
     Initialize the pipeline
     :param model_name: name of the model to be used
@@ -30,13 +30,13 @@ def init_pipeline(model_name) -> pipeline:
     return pipe
 
 
-def transcribe(filepath, pipe, chunks_folder) -> str:
+def transcribe(filepath:str, pipe:pipeline, chunks_folder:str) -> str:
     """
     Transcribe the audio file
     :param filepath: path to the audio file
     :param pipe: pipeline object
     :param chunks_folder: folder where the chunks will be saved
-    :return: message log
+    :return: log message
     """
     
     with open(filepath, "rb") as f:
@@ -59,13 +59,13 @@ def transcribe(filepath, pipe, chunks_folder) -> str:
     return f"Transcription saved to {output_path}."
 
 
-def segment(filepath, segments_folder, length:int=60) -> list:
+def segment(filepath:str, segments_folder:str, length:int=60) -> list:
     """
     Segment the chunks to get segments of the desired length
     :param filepath: path to the jsonl file
     :param segments_folder: folder where the segments will be saved
     :param length: length of the segments in seconds
-    :return: list of segments
+    :return: log message
     """
 
     # read the chunks as list of individual json objects
