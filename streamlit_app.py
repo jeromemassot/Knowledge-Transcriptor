@@ -1,6 +1,6 @@
+from segments_encoder_indexor import encode_and_index, query_index, list_collections, answer_question
 from audios_whisper_transcriptor import init_pipeline, transcribe, segment
 from videos_stream_retriever import extract_audio_from_playlist
-from segments_encoder_indexor import encode_and_index
 import streamlit as st
 import os
 
@@ -221,13 +221,8 @@ segments_collections = os.listdir("./outputs/segments")
 segments_collection_name = st.selectbox("Collection of text segments", options=segments_collections)
 segments_collection_path = os.path.join("./outputs/segments", segments_collection_name)
 
-# set the output vectors folder
-vectors_folder =  os.path.join("./outputs/vectors", segments_collection_name)
-if not os.path.exists(vectors_folder):
-    os.mkdir(vectors_folder)
-
 # encode the segments button
-encode_segments_button = st.button("Encode selected segments")
+encode_segments_button = st.button("Encode and Index selected segments")
 
 if encode_segments_button and segments_collection_path:
     msg = encode_and_index(
@@ -241,3 +236,51 @@ if encode_segments_button and segments_collection_path:
     st.balloons()
 
     st.write(f'Encoding and Indexing: {msg}.')
+
+st.subheader("Search for knowledge")
+
+st.markdown("""
+    The final step of the pipeline is to search for knowledge. You can input a question.
+    And the knowledge retriever will search for the most relevant segments in the knowledge 
+    base (the index), generate a summary of the segments and play the audio stream.
+""")
+
+st.markdown("""
+    Additionaly, the original YouTube videos contents will be displayed, at the exact moment when the 
+    knowledge you searched for is discussed. You can play the video from that moment.
+""")
+
+st.info("""
+    Neither the questions entered in the search bar nor the answered generated or retrieved are not stored anywhere.
+""")
+
+# index selector
+index_names = list_collections(qdrant_api_key=st.secrets["QDRANT_API_KEY"])
+index_name = st.selectbox("Index", options=index_names)
+
+# search bar
+question = st.text_input("What do you want to know?")
+
+# number of contexts
+top_k = st.number_input(
+    "Number of contexts", min_value=1, max_value=5, value=3, step=1
+)
+
+# search button
+search_button = st.button("Answer my question")
+
+if search_button and question:
+    contexts = query_index(question, index_name, st.secrets["QDRANT_API_KEY"], top_k)
+    
+    with st.expander("Retrieved contexts"):
+        for context in contexts:
+	        st.write(context.payload, "score:", context.score)
+                
+    if len(contexts) > 0:
+        text_from_contexts = [context.payload["Text"] for context in contexts]
+        text_from_contexts.append(context.payload["Summary"])
+        answer = answer_question(question, text_from_contexts, st.secrets["OPENAI_API_KEY"])
+    else:
+        answer = "Sorry, I don't know the answer to that question."
+
+    st.write(answer)
