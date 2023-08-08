@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
 from qdrant_client import models, QdrantClient
 import pandas as pd
+import openai
 import json
 import re
 import os
@@ -81,3 +82,80 @@ def encode_and_index(folder_path, collection_name:str, chosen_metadata, qdrant_a
     )
 
     return f"Segments indexed: {len(all_segments)}"
+
+
+def query_index(question:str, collection_name:str, qdrant_api_key:str, top_k:int=3) -> list:
+    """
+    Query the index and return the results.
+    :param question: question to query
+    :param top_k: number of contexts to return
+    :return: list of results
+    """
+    # create the index
+    qdrant_client = QdrantClient(
+        url="https://08afe25e-6838-46ed-946e-f36b8d2afe10.eu-central-1-0.aws.cloud.qdrant.io:6333", 
+        api_key=qdrant_api_key
+    )
+
+    # load the encoder
+    encoder = SentenceTransformer("all-MiniLM-L6-v2")
+
+    hits = qdrant_client.search(
+	    collection_name=collection_name,
+	    query_vector=encoder.encode(question).tolist(),
+	    limit=top_k
+    )
+    
+    return hits
+
+
+def list_collections(qdrant_api_key:str) -> list:
+    """
+    List the collections in the index.
+    :param qdrant_api_key: API key for the Qdrant vector database
+    :return: list of collections
+    """
+
+    # create the index
+    qdrant_client = QdrantClient(
+        url="https://08afe25e-6838-46ed-946e-f36b8d2afe10.eu-central-1-0.aws.cloud.qdrant.io:6333", 
+        api_key=qdrant_api_key
+    )
+
+    collection_names = [collection[1][0].name for collection in qdrant_client.get_collections()]
+    return collection_names
+
+
+def answer_question(question:str, contexts:list, openai_api_key:str) -> str:
+    """
+    Answer the question with the contexts.
+    :param question: question to answer
+    :param contexts: list of contexts
+    :param openai_api_key: API key for the OpenAI API
+    :return: answer
+    """
+
+    openai.api_key = openai_api_key
+
+    context = " ".join(contexts)
+
+    prompt = f"""Answer the question based on the context below and if the question can't be answered based on the context, say \'I don't know\'\n\n
+    Context: {context}\n\n---\n\nQuestion: {question}\nAnswer:",
+    """
+
+    try:
+        # Create a completions using the question and context
+        response = openai.Completion.create(
+            prompt=prompt,
+            temperature=0,
+            max_tokens=250,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+            stop=None,
+            model="text-davinci-003"
+        )
+        return response["choices"][0]["text"].strip()
+    except Exception as e:
+        print(e)
+
