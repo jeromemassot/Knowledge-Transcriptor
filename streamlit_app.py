@@ -272,15 +272,34 @@ search_button = st.button("Answer my question")
 if search_button and question:
     contexts = query_index(question, index_name, st.secrets["QDRANT_API_KEY"], top_k)
     
-    with st.expander("Retrieved contexts"):
-        for context in contexts:
-	        st.write(context.payload, "score:", context.score)
-                
-    if len(contexts) > 0:
+    if contexts and len(contexts)>0:
+        with st.expander("Retrieved contexts"):
+            for context in contexts:
+                st.write(context.payload, "score:", context.score)
+        
         text_from_contexts = [context.payload["Text"] for context in contexts]
         text_from_contexts.append(context.payload["Summary"])
         answer = answer_question(question, text_from_contexts, st.secrets["OPENAI_API_KEY"])
-    else:
-        answer = "Sorry, I don't know the answer to that question."
 
-    st.write(answer)
+        st.write("AI Answer:")
+        st.markdown(f':green[{answer}]')
+
+        st.subheader("Video streams")
+
+        columns = st.columns(len(contexts))
+        for i, col in enumerate(columns):
+            with col:
+                title = contexts[i].payload['Title']
+                url = contexts[i].payload['URL']
+                date = contexts[i].payload['Date']
+                authors = contexts[i].payload['Authors']
+                start = int(contexts[i].payload['Start'])
+
+                st.video(url, start_time=start)
+                st.write(f"**Title**: {title}")
+                st.write(f"**Authors**: {authors}")
+                st.write(f"**Date**: {date}")
+
+    else:
+        st.write("Incomplte status:")
+        st.markdown(":red[Sorry, I don't anything about this question in the knowledge-base.]")
